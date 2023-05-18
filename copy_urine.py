@@ -1,11 +1,10 @@
 import numpy as np
 import cv2
-import pandas as pd
 import csv
 import os
 import blue_line as bl
-from time import sleep 
-from datetime import datetime
+from time import sleep
+import pandas as pd 
 
 
 df =  pd.read_csv("mm_to_ml - Sheet1 (1).csv")
@@ -13,7 +12,7 @@ urine_height_mm = df["mm"].values
 ml_height = df["ml"].values
 
 mf = 0
-yval = 0
+global yval
 
 # Create an empty dictionary to store mm-to-ml mappings
 mm_to_ml = {}
@@ -45,9 +44,9 @@ def closest_index_list(lst, num):
 
 
 def get_urine_volume(img, cls=0.0):
-    # print("first_Second is called")
+    print("first_Second is called")
     if cls == 0.0:
-        # print("Small Box")
+        print("Small Box")
         # print(img)
         small_box(img)
         # print("Large Box")
@@ -56,9 +55,9 @@ def get_urine_volume(img, cls=0.0):
 
 
 def get_urine_volume2(img, cls=0.0):
-    # print("for larg Second is called")
+    print("for larg Second is called")
     if cls == 0.0:
-        # print("Large Box")
+        print("Large Box")
         # print(img)
         large_Box(img)        
 
@@ -68,40 +67,40 @@ def small_box(frame):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
 
-    # mask = cv2.inRange(hsv, lower_blue, upper_blue)
+    mask = cv2.inRange(hsv, lower_blue, upper_blue)
 
         # Apply morphological operations to remove small shapes
-    # kernel = np.ones((5,5), np.uint8)
-    # opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    # closing = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel)
+    kernel = np.ones((5,5), np.uint8)
+    opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    closing = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel)
 
     # Detect contours in the image
-    # contours, hierarchy = cv2.findContours(closing, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(closing, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Draw only vertical blue lines
-    max_h = frame.shape[0]
+    max_h = 0
 
-    # for cnt in contours:
-    #     x,y,w,h = cv2.boundingRect(cnt)
+    for cnt in contours:
+        x,y,w,h = cv2.boundingRect(cnt)
 
 
-    #     if w << h:
-    #         cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
-    #         # print("width", w)
-    #         print("height", h)
-    #         if h > max_h:
-    #             max_h = h
-    # print("Maximum h:", max_h)
+        # if w << h:
+        if h != 0 and w < 0.1 * h and h > 50:
+            cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
+            # print("width", w)
+            print("height", h)
+            if h > max_h:
+                max_h = h
+                max_h != 0
+    print("Maximum h:", max_h)
 
     # Display images
-    # cv2.imshow('webcam', frame)
-    # cv2.imshow('opening',opening)
-    # cv2.imshow ('closing',closing)
+    cv2.imshow('webcam', frame)
+    cv2.imshow('opening',opening)
+    cv2.imshow ('closing',closing)
 
+    
 
-
-    # hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
     # # Find the contours in the binary mask
     contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     # # Initialize an empty list to store the distance values
@@ -121,24 +120,23 @@ def small_box(frame):
         y1 = top_point[1]
         y2 = bottom_point[1]
         distance = abs(y2 - y1)
-        # print("Length of yellow height: ",distance)
+        print("Length of yellow height: ",distance)
         distances.append(distance)
         
         # Calculate the average distance
         average_distance = round(sum(distances) / len(distances))
-        # cv2.imshow('frame_s', frame)
-        mm_height = (114.5/max_h)*distance
-        mf = (114.5/max_h)
-        # print("mf:" ,mf)
-        # print("volume_urine_mm: ",mm_height)
+        cv2.imshow('frame_s', frame)
+        # try:
+
+        mm_height = (116.5/max_h)*distance
+        mf = (116.5/max_h)
+        print("mf:" ,mf)
+        print("volume_urine_mm: ",mm_height)
         # cv2.waitKey(0)
 
         urine_volume = ml_height[closest_index_array(mm_height, urine_height_mm)]
         print(f"Urine Height in (mm): {mm_height} -> Urine Volume in Small Box: {urine_volume} (ml)")
         return urine_volume
-    else:
-        return None
-        
 
     
 def large_Box(frame):
@@ -168,72 +166,51 @@ def large_Box(frame):
         contours, hierarchy = cv2.findContours(yellow_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if contours:
             # Find the largest contour in the yellow mask
-            largest_contour =max(contours, key=cv2.contourArea)
-            mask = np.zeros_like(yellow_mask)
-            cv2.drawContours(mask, [largest_contour], 0, (255, 255, 255), -1)
-            new_contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            actual_contour = new_contours[0]
-            x, y, w, h = cv2.boundingRect(actual_contour)
-
-            #Get the bounding rectangle of the largest contour
-            # x, y, w, h = cv2.boundingRect(largest_contour)
-            # first_contour = contours[0]
-            # # Get the bounding rectangle of the first contour
-            # x, y, w, h = cv2.boundingRect(first_contour)
+            largest_contour = max(contours, key=cv2.contourArea)
+            # Get the bounding rectangle of the largest contour
+            x, y, w, h = cv2.boundingRect(largest_contour)
             yval = y
             large_vol = bl.blue_line(frame, yval)
             # Draw the bounding rectangle on the frame
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-            # print(x,y,w,h)
+            print(x,y,w,h)
             # Calculate the vertical height of the yellow color
             yellow_height = h
             mm = mf*h
              # Save the image to desktop
             path = os.path.expanduser("~/Desktop/large_box.jpg")
             cv2.imwrite(path, frame)
-            # print("Yellow_height_large_Box_mm:",mm)
-            # print("yellow height in large box:",yellow_height)
+            print("Yellow_height_large_Box_mm:",mm)
+            print("yellow height in large box:",yellow_height)
 
         # Display the result
-        # cv2.imshow('yellow', yellow_mask)
+        cv2.imshow('yellow', yellow_mask)
 
         # Display the measurement
         # cv2.putText(frame, "Yellow height: {}".format(yellow_height), (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        # cv2.imshow('Measurement', frame)
+        cv2.imshow('Measurement', frame)
         return large_vol
-
          # Exit if 'q' is pressed
         # if cv2.waitKey(25) & 0xFF == ord('q'):
         #     # break
         #         cv2.destroyAllWindows()
 
-sm_vol = None 
-lg_vol = None
+sm_vol =0 
+lg_vol =0
 
 def get_urine_volume(img, cls=0.0):
     global sm_vol,lg_vol
-    # print("Second is called")
+    print("Second is called")
    
     if cls == 0.0:
-        # print("Small Box")
+        print("Small Box")
         # print(img)
         sm_vol=small_box(img)
     else:
-        # print("large Box")
+        print("large Box")
         # print(img)
         lg_vol=large_Box(img)
-    if sm_vol is not None:
-        now = datetime.now()
-        mi=now.strftime("%M")
-        se=now.strftime("%S")
-        date_time = now.strftime("%m/%d/%Y, %H:%M:%S %f")
-        if int(mi) % 2 == 0 and int(se) == 0:
-            f = open("database.txt", "a")
-            f.write(f"{date_time} ==> small box/ large box : {sm_vol}/{lg_vol} \r\n")
-            f.close()
-        print("__________________________________________")
-        print(f"small box+ large box : total= {sm_vol}+{lg_vol}")
-        print("___________________________________________")
-        sleep(1)
-
-        
+    print("################################################")
+    print(f"small box/ large box : {sm_vol}/{lg_vol}")
+    print("################################################")
+    sleep(1)
