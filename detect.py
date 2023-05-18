@@ -33,6 +33,8 @@ import os
 import platform
 import sys
 from pathlib import Path
+import numpy as np
+
 
 import torch
 
@@ -48,6 +50,7 @@ from utils.general import (LOGGER, Profile, check_file, check_img_size, check_im
                            increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
+import urine_processing as urine
 
 
 @smart_inference_mode()
@@ -60,7 +63,7 @@ def run(
         iou_thres=0.45,  # NMS IOU threshold
         max_det=1000,  # maximum detections per image
         device='',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
-        view_img=False,  # show results
+        view_img=True,  # show results
         save_txt=False,  # save results to *.txt
         save_conf=False,  # save confidences in --save-txt labels
         save_crop=False,  # save cropped prediction boxes
@@ -114,7 +117,9 @@ def run(
     # Run inference
     model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
     seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
+    print("Going To Loop")
     for path, im, im0s, vid_cap, s in dataset:
+        print("In the Loop, 122 line")
         with dt[0]:
             im = torch.from_numpy(im).to(model.device)
             im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
@@ -150,6 +155,8 @@ def run(
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            # print(f"Debug Line 155:  {det}")
+            # print(annotator)
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
@@ -160,8 +167,9 @@ def run(
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                 # Write results
+                print("Write results")
                 for *xyxy, conf, cls in reversed(det):
-                    if save_txt:  # Write to file
+                    if save_txt and False:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
                         with open(f'{txt_path}.txt', 'a') as f:
@@ -170,12 +178,25 @@ def run(
                     if save_img or save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
                         label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                        annotator.box_label(xyxy, label, color=colors(c, True))
+                        # annotator.box_label(xyxy, label, color=colors(c, True))
+                        print("position",(xyxy[2].item(),(xyxy[3].item(),(xyxy[0].item(),(xyxy[1].item())))))
+                        x, y, x1, y1 = int(xyxy[2].item()), int(xyxy[3].item()), int(xyxy[0].item()), int(xyxy[1].item())
+                        print(f"x: {x}, y: {y}, x1: {x1}, y1: {y1}, class: {cls}")
+                        crop_small_box = imc[y1:y, x1:x]
+                        # src_pts = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]])
+                        # dst_pts = np.array([[0, 0], [x2-x1, 0], [x2-x1, y2-y1], [0, y2-y1]])
+                        # M = cv2.getPerspectiveTransform(src_pts.astype(np.float32), dst_pts.astype(np.float32))
+                        # cropped_img = cv2.warpPerspective(save_img, M, (x2-x1, y2-y1))
+                        print(f"CLS:{cls}")
+                        urine.get_urine_volume(crop_small_box, cls=cls)
+                        cv2.imshow(f'cropped_image {cls}', crop_small_box)
+                        # cv2.waitKey(0)
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
 
             # Stream results
             im0 = annotator.result()
+            view_img = True
             if view_img:
                 if platform.system() == 'Linux' and p not in windows:
                     windows.append(p)
@@ -185,9 +206,10 @@ def run(
                 cv2.waitKey(1)  # 1 millisecond
 
             # Save results (image with detections)
-            if save_img:
+            if save_img and False:
                 if dataset.mode == 'image':
                     cv2.imwrite(save_path, im0)
+                    # print(im0)
                 else:  # 'video' or 'stream'
                     if vid_path[i] != save_path:  # new video
                         vid_path[i] = save_path
@@ -237,7 +259,7 @@ def parse_opt():
     parser.add_argument('--visualize', action='store_true', help='visualize features')
     parser.add_argument('--update', action='store_true', help='update all models')
     parser.add_argument('--project', default=ROOT / 'runs/detect', help='save results to project/name')
-    parser.add_argument('--name', default='exp', help='save results to project/name')
+    parser.add_argument('--name', default='exp', help='save results to proqqqect/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--line-thickness', default=3, type=int, help='bounding box thickness (pixels)')
     parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
@@ -259,3 +281,4 @@ def main(opt):
 if __name__ == '__main__':
     opt = parse_opt()
     main(opt)
+
